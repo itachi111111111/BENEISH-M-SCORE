@@ -76,7 +76,7 @@ def preprocess_data(df, test_size):
 
     X_train, X_val, y_train, y_val = train_test_split(
         X_train_full, y_train_full,
-        test_size=0.25, stratify=y_train_full,
+        test_size=0.20, stratify=y_train_full,
         random_state=RANDOM_STATE
     )
 
@@ -170,7 +170,11 @@ model_choice = st.sidebar.selectbox(
     ]
 )
 
-test_size = st.sidebar.slider("Test Set Size", 0.2, 0.3, 0.4,0.5)
+test_size = st.sidebar.select_slider(
+    "Test Set Size",
+    options=[0.2, 0.3, 0.4, 0.5],
+    value=0.3
+)
 
 X_train_s, X_val_s, X_test_s, y_train, y_val, y_test, scaler = preprocess_data(df, test_size)
 
