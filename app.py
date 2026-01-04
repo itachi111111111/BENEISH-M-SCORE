@@ -246,28 +246,59 @@ elif st.button("Run SHAP Analysis"):
     shap.summary_plot(shap_values, X_shap, show=False)
     st.pyplot(bbox_inches="tight")
 st.header("7. Model Comparison (Beneish vs ML Models)")
+compare_extra = st.checkbox(
+    "Compare with another ML model (optional)"
+)
 
+secondary_model_choice = None
+if compare_extra:
+    secondary_model_choice = st.selectbox(
+        "Select Secondary Model for Comparison",
+        [
+            "Logistic Regression",
+            "Decision Tree (CART)",
+            "Random Forest",
+            "XGBoost"
+        ]
+    )
 results = []
 
+# ---------------- Beneish Benchmark ----------------
 beneish_pred = df.loc[y_test.index, "Beneish_Flag"]
 
 results.append({
     "Model": "Beneish M-Score",
     "Accuracy": accuracy_score(y_test, beneish_pred),
-    "Precision": precision_score(y_test, beneish_pred),
+    "Precision": precision_score(y_test, beneish_pred, zero_division=0),
     "Recall": recall_score(y_test, beneish_pred),
     "F1 Score": f1_score(y_test, beneish_pred),
     "ROC-AUC": np.nan
 })
-st.caption("All models are evaluated on the same held-out test set for fairness.")
-for name in ["Logistic Regression", "Random Forest", "XGBoost"]:
-    mdl = get_model(name, y_train)
-    mdl.fit(X_train_s, y_train)
-    metrics = evaluate_model(mdl, X_test_s, y_test)
-    metrics["Model"] = name
-    results.append(metrics)
 
-st.dataframe(pd.DataFrame(results).set_index("Model"))
+# ---------------- Primary ML Model ----------------
+primary_metrics = evaluate_model(model, X_test_s, y_test)
+primary_metrics["Model"] = f"{model_choice} (Primary)"
+results.append(primary_metrics)
+
+# ---------------- Optional Secondary ML Model ----------------
+if compare_extra and secondary_model_choice != model_choice:
+
+    secondary_model = get_model(secondary_model_choice, y_train)
+    secondary_model.fit(X_train_s, y_train)
+
+    secondary_metrics = evaluate_model(
+        secondary_model, X_test_s, y_test
+    )
+    secondary_metrics["Model"] = f"{secondary_model_choice} (Secondary)"
+
+    results.append(secondary_metrics)
+
+comparison_df = pd.DataFrame(results)
+st.dataframe(comparison_df.set_index("Model"))
+
+st.caption(
+    "All models are evaluated on the same held-out test set to ensure fair comparison."
+)
 st.header("6. Single Firm Risk Assessment")
 
 user_input = {}
