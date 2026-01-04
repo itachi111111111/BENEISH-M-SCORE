@@ -284,8 +284,9 @@ elif st.button("Run SHAP Analysis"):
 
     shap.summary_plot(shap_values, X_shap, show=False)
     st.pyplot(bbox_inches="tight")
+ # ---------------- SHAP INTERPRETATION TEXT ----------------
     if execution_mode == "Fast Mode":
-    st.markdown("""
+        st.markdown("""
     ### SHAP Summary Interpretation (Fast Mode)
 
     This SHAP summary provides a **high-level overview** of the key drivers
@@ -318,6 +319,7 @@ else:
     isolated ratios, but by **combined financial pressures**, which modern
     machine learning models capture more effectively than linear rules.
     """)
+
 st.header("7. Model Comparison (Beneish vs ML Models)")
 compare_extra = st.checkbox(
     "Compare with another ML model (optional)"
