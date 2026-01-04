@@ -334,6 +334,10 @@ else:
             growth pressure**, not isolated ratio movements.
             """)
 st.header("7. Model Comparison (Beneish vs ML Models)")
+st.caption(
+    "All models are evaluated using a fixed probability threshold of 0.50 "
+    "to ensure fair comparison across approaches."
+)
 compare_extra = st.checkbox(
     "Compare with another ML model (optional)"
 )
