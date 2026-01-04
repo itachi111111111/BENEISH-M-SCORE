@@ -170,7 +170,7 @@ model_choice = st.sidebar.selectbox(
     ]
 )
 
-test_size = st.sidebar.slider("Test Set Size", 0.2, 0.4, 0.05, 0.3)
+test_size = st.sidebar.slider("Test Set Size", 0.2, 0.3, 0.4,0.5)
 
 X_train_s, X_val_s, X_test_s, y_train, y_val, y_test, scaler = preprocess_data(df, test_size)
 
@@ -224,6 +224,45 @@ st.dataframe(pd.DataFrame(
     index=["Actual Non-Manipulator", "Actual Manipulator"],
     columns=["Predicted Non-Manipulator", "Predicted Manipulator"]
 ))
+st.subheader("How to Interpret These Evaluation Metrics")
+
+st.markdown("""
+In the context of **earnings manipulation detection**, not all evaluation metrics
+carry equal importance.
+
+###  Primary Metric: Recall
+Recall measures the proportion of **actual manipulators correctly identified** by the model.
+
+• A **low recall** implies that manipulative firms are being missed (false negatives)  
+• In financial oversight and auditing contexts, this is **highly costly**, as undetected
+  manipulation can lead to regulatory penalties, investor losses, and reputational damage  
+
+Therefore, **high recall is the most critical objective** of this system.
+
+###  Supporting Metric: F1 Score
+The F1 Score balances:
+• Recall (catching manipulators)  
+• Precision (avoiding excessive false alarms)
+
+A strong F1 score indicates that the model achieves **effective screening**
+without overwhelming auditors with too many false positives.
+
+###  ROC–AUC (Ranking Ability)
+ROC–AUC reflects how well the model **ranks firms by manipulation risk**
+across all possible thresholds.
+
+• A higher ROC–AUC indicates superior **risk discrimination**
+• This is useful for prioritizing firms for further investigation
+
+###  Why Accuracy Is Not Emphasized
+Accuracy can be misleading in this setting due to **class imbalance**.
+A model predicting most firms as non-manipulators may achieve high accuracy
+while failing at its primary objective—detecting manipulation.
+
+**In summary**, recall-driven evaluation ensures the system functions as an
+*early warning mechanism* rather than a naive classifier.
+""")
+
 st.header("5. Model Explainability (SHAP)")
 
 if model_choice in COMPLEX_MODELS:
@@ -245,6 +284,40 @@ elif st.button("Run SHAP Analysis"):
 
     shap.summary_plot(shap_values, X_shap, show=False)
     st.pyplot(bbox_inches="tight")
+    if execution_mode == "Fast Mode":
+    st.markdown("""
+    ### SHAP Summary Interpretation (Fast Mode)
+
+    This SHAP summary provides a **high-level overview** of the key drivers
+    behind earnings manipulation risk.
+
+    • Features at the top have the strongest overall influence  
+    • Rightward movement increases predicted manipulation risk  
+    • Red points represent higher feature values; blue indicate lower values  
+
+    Even with a reduced sample, **ACCR (accrual intensity)** and
+    **DSRI (receivable growth)** consistently emerge as dominant signals,
+    aligning with classical earnings manipulation theory.
+    """)
+else:
+    st.markdown("""
+    ### SHAP Summary Interpretation (Detailed Mode)
+
+    This SHAP visualization offers a **granular explanation** of how individual
+    financial ratios contribute to manipulation risk.
+
+    • Each point represents a firm-level observation  
+    • The horizontal spread reflects the **magnitude and direction** of impact  
+    • Non-linear patterns indicate threshold and interaction effects  
+
+    The results highlight that **accrual-based distortions (ACCR)** and
+    **revenue-related pressure (DSRI, SGI)** significantly elevate manipulation
+    risk, particularly when these factors interact.
+
+    This reinforces the notion that earnings manipulation is driven not by
+    isolated ratios, but by **combined financial pressures**, which modern
+    machine learning models capture more effectively than linear rules.
+    """)
 st.header("7. Model Comparison (Beneish vs ML Models)")
 compare_extra = st.checkbox(
     "Compare with another ML model (optional)"
