@@ -135,9 +135,13 @@ def get_model(choice, y_train):
 # ============================================================
 
 @st.cache_resource(show_spinner="Training model...")
-def train_model(model, X_train, y_train):
+def train_model(model_choice, X_train, y_train):
+
+    model = get_model(model_choice, y_train)
     model.fit(X_train, y_train)
+
     return model
+
 
 # ============================================================
 # DATA UPLOAD
@@ -203,7 +207,7 @@ test_size = st.sidebar.slider("Test Set Size", 0.2, 0.4, 0.05, 0.3)
     scaler, feature_names
 ) = preprocess_data(df, test_size)
 
-model = train_model(get_model(model_choice, y_train), X_train_s, y_train)
+model = train_model(model_choice, X_train_s, y_train)
 
 # ============================================================
 # VALIDATION-BASED THRESHOLD
