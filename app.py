@@ -249,7 +249,7 @@ st.header("7. Model Comparison (Beneish vs ML Models)")
 
 results = []
 
-beneish_pred = df.loc[df.index.isin(df.index), "Beneish_Flag"]
+beneish_pred = df.loc[y_test.index, "Beneish_Flag"]
 
 results.append({
     "Model": "Beneish M-Score",
@@ -259,7 +259,7 @@ results.append({
     "F1 Score": f1_score(y_test, beneish_pred),
     "ROC-AUC": np.nan
 })
-
+st.caption("All models are evaluated on the same held-out test set for fairness.")
 for name in ["Logistic Regression", "Random Forest", "XGBoost"]:
     mdl = get_model(name, y_train)
     mdl.fit(X_train_s, y_train)
