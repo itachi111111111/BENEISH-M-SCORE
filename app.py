@@ -270,60 +270,69 @@ while failing at its primary objective—detecting manipulation.
 st.header("5. Model Explainability (SHAP)")
 
 if model_choice in COMPLEX_MODELS:
-    st.info("SHAP is skipped for ensemble models due to attribution ambiguity.")
-
-elif st.button("Run SHAP Analysis"):
-
-    sample_size = 30 if execution_mode == "Fast Mode" else 100
-    X_shap = pd.DataFrame(X_test_s, columns=FEATURES).sample(
-        n=min(sample_size, len(X_test_s)), random_state=42
+    st.info(
+        "SHAP explainability is intentionally skipped for ensemble models. "
+        "These models combine multiple learners and do not have a unique, "
+        "well-defined feature attribution structure."
     )
 
-    if model_choice == "Logistic Regression":
-        explainer = shap.LinearExplainer(model, X_shap)
-        shap_values = explainer.shap_values(X_shap)
-    else:
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_shap)
-
-    shap.summary_plot(shap_values, X_shap, show=False)
-    st.pyplot(bbox_inches="tight")
- # ---------------- SHAP INTERPRETATION TEXT ----------------
-    if execution_mode == "Fast Mode":
-        st.markdown("""
-    ### SHAP Summary Interpretation (Fast Mode)
-
-    This SHAP summary provides a **high-level overview** of the key drivers
-    behind earnings manipulation risk.
-
-    • Features at the top have the strongest overall influence  
-    • Rightward movement increases predicted manipulation risk  
-    • Red points represent higher feature values; blue indicate lower values  
-
-    Even with a reduced sample, **ACCR (accrual intensity)** and
-    **DSRI (receivable growth)** consistently emerge as dominant signals,
-    aligning with classical earnings manipulation theory.
-    """)
 else:
-    st.markdown("""
-    ### SHAP Summary Interpretation (Detailed Mode)
+    if st.button("Run SHAP Analysis"):
 
-    This SHAP visualization offers a **granular explanation** of how individual
-    financial ratios contribute to manipulation risk.
+        sample_size = 30 if execution_mode == "Fast Mode" else 100
 
-    • Each point represents a firm-level observation  
-    • The horizontal spread reflects the **magnitude and direction** of impact  
-    • Non-linear patterns indicate threshold and interaction effects  
+        X_shap = pd.DataFrame(
+            X_test_s, columns=FEATURES
+        ).sample(
+            n=min(sample_size, len(X_test_s)),
+            random_state=42
+        )
 
-    The results highlight that **accrual-based distortions (ACCR)** and
-    **revenue-related pressure (DSRI, SGI)** significantly elevate manipulation
-    risk, particularly when these factors interact.
+        with st.spinner("Computing SHAP values..."):
 
-    This reinforces the notion that earnings manipulation is driven not by
-    isolated ratios, but by **combined financial pressures**, which modern
-    machine learning models capture more effectively than linear rules.
-    """)
+            if model_choice == "Logistic Regression":
+                explainer = shap.LinearExplainer(model, X_train_s)
+                shap_values = explainer.shap_values(X_shap)
 
+            else:
+                explainer = shap.TreeExplainer(model)
+                shap_values = explainer.shap_values(X_shap)
+
+            fig, ax = plt.subplots()
+            shap.summary_plot(shap_values, X_shap, show=False)
+            st.pyplot(fig)
+
+        # ================= SHAP EXPLANATION TEXT =================
+        if execution_mode == "Fast Mode":
+            st.markdown("""
+            ### SHAP Summary Interpretation (Fast Mode)
+
+            This visualization provides a **high-level overview** of the drivers
+            of earnings manipulation risk.
+
+            • Features at the top have the strongest overall influence  
+            • Rightward movement increases predicted manipulation risk  
+            • Red points indicate higher feature values; blue indicate lower values  
+
+            Even with a reduced sample, **ACCR** and **DSRI** consistently emerge
+            as dominant risk indicators, aligning with Beneish-style accounting theory.
+            """)
+
+        else:
+            st.markdown("""
+            ### SHAP Summary Interpretation (Detailed Mode)
+
+            This detailed SHAP analysis reveals **how and why** financial ratios
+            influence manipulation risk.
+
+            • Each point represents a firm-level observation  
+            • Horizontal spread reflects non-linear or interaction effects  
+            • Larger positive SHAP values indicate sharper risk escalation  
+
+            The dominance of **ACCR**, **DSRI**, and **SGI** indicates that
+            manipulation risk is driven by **accrual intensity combined with
+            growth pressure**, not isolated ratio movements.
+            """)
 st.header("7. Model Comparison (Beneish vs ML Models)")
 compare_extra = st.checkbox(
     "Compare with another ML model (optional)"
