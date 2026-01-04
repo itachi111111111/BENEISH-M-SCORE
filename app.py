@@ -6,8 +6,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import shap
-from xgboost import XGBClassifier
 import matplotlib.pyplot as plt
+from xgboost import XGBClassifier
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -19,52 +19,52 @@ from sklearn.metrics import (
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+def evaluate_model(model, X_test, y_test):
+    y_pred = model.predict(X_test)
+    y_prob = model.predict_proba(X_test)[:, 1]
 
-# ============================================================
-# STREAMLIT CONFIG
-# ============================================================
-
+    return {
+        "Accuracy": accuracy_score(y_test, y_pred),
+        "Precision": precision_score(y_test, y_pred, zero_division=0),
+        "Recall": recall_score(y_test, y_pred),
+        "F1 Score": f1_score(y_test, y_pred),
+        "ROC-AUC": roc_auc_score(y_test, y_prob)
+    }
 st.set_page_config(page_title="Earnings Manipulation Detection", layout="wide")
-st.title("Detecting Earnings Manipulation in Indian Firms")
 
-# ============================================================
-# SIDEBAR – EXECUTION MODE
-# ============================================================
+st.title("Detecting Earnings Manipulation in Indian Firms")
+st.caption("Machine Learning–based Early Warning System")
 
 st.sidebar.header("Execution Settings")
 
 execution_mode = st.sidebar.radio(
     "Mode",
     ["Fast Mode", "Detailed Mode"],
-    help="Fast Mode disables SHAP and heavy computations"
+    help="Fast Mode reduces computation; Detailed Mode provides deeper explainability"
 )
-
-st.caption("Machine Learning–based Early Warning System")
-
-# ============================================================
-# CONSTANTS
-# ============================================================
-
+# ---- UI messaging only (no logic impact) ----
+if execution_mode == "Fast Mode":
+    st.info(
+        "⚡ **Fast Mode Enabled**: "
+        "SHAP analysis uses a reduced sample for quicker responsiveness. "
+        "Model training, validation, evaluation, and predictions remain unchanged."
+    )
+else:
+    st.info(
+        "🔍 **Detailed Mode Enabled**: "
+        "SHAP analysis uses a larger sample for richer interpretability. "
+        "Core model results and predictions remain unchanged."
+    )
 FEATURES = ["DSRI", "GMI", "AQI", "SGI", "DEPI", "SGAI", "ACCR", "LEVI"]
 TARGET = "Manipulator"
 RANDOM_STATE = 42
-HEAVY_MODELS = ["Ensemble (Logistic + RF)"]
-
-# ============================================================
-# DATA LOADING (CACHED)
-# ============================================================
-
-@st.cache_data(show_spinner="Loading dataset...")
-def load_data(file):
-    if file.name.endswith(".xlsx"):
-        return pd.read_excel(file)
-    return pd.read_csv(file)
-
-# ============================================================
-# PREPROCESSING (CACHED)
-# ============================================================
-
-@st.cache_data(show_spinner="Preprocessing data...")
+COMPLEX_MODELS = ["Ensemble (Logistic + RF)"]
+@st.cache_data
+def load_data(uploaded_file):
+    if uploaded_file.name.endswith(".xlsx"):
+        return pd.read_excel(uploaded_file)
+    return pd.read_csv(uploaded_file)
+@st.cache_data
 def preprocess_data(df, test_size):
 
     X = df[FEATURES]
@@ -85,16 +85,7 @@ def preprocess_data(df, test_size):
     X_val_s = scaler.transform(X_val)
     X_test_s = scaler.transform(X_test)
 
-    return (
-        X_train_s, X_val_s, X_test_s,
-        y_train, y_val, y_test,
-        scaler, X_train.columns
-    )
-
-# ============================================================
-# MODEL FACTORY
-# ============================================================
-
+    return X_train_s, X_val_s, X_test_s, y_train, y_val, y_test, scaler
 def get_model(choice, y_train):
 
     if choice == "Logistic Regression":
@@ -105,18 +96,17 @@ def get_model(choice, y_train):
 
     if choice == "Random Forest":
         return RandomForestClassifier(
-            n_estimators=150, max_depth=6,
-            class_weight="balanced", random_state=RANDOM_STATE
+            n_estimators=300, class_weight="balanced", random_state=RANDOM_STATE
         )
 
     if choice == "XGBoost":
         return XGBClassifier(
-            n_estimators=120,
+            n_estimators=300,
             max_depth=4,
-            learning_rate=0.1,
+            learning_rate=0.05,
             subsample=0.8,
             colsample_bytree=0.8,
-            n_jobs=1,
+            objective="binary:logistic",
             eval_metric="logloss",
             scale_pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
             random_state=RANDOM_STATE
@@ -125,28 +115,14 @@ def get_model(choice, y_train):
     if choice == "Ensemble (Logistic + RF)":
         lr = LogisticRegression(max_iter=1000, class_weight="balanced")
         rf = RandomForestClassifier(
-            n_estimators=120, max_depth=5,
-            class_weight="balanced", random_state=RANDOM_STATE
+            n_estimators=200, class_weight="balanced", random_state=RANDOM_STATE
         )
         return VotingClassifier(estimators=[("lr", lr), ("rf", rf)], voting="soft")
-
-# ============================================================
-# MODEL TRAINING (CACHED)
-# ============================================================
-
-@st.cache_resource(show_spinner="Training model...")
-def train_model(model_choice, X_train, y_train):
-
+@st.cache_resource
+def train_model(model_choice, X_train_s, y_train):
     model = get_model(model_choice, y_train)
-    model.fit(X_train, y_train)
-
+    model.fit(X_train_s, y_train)
     return model
-
-
-# ============================================================
-# DATA UPLOAD
-# ============================================================
-
 st.header("1. Upload Dataset")
 
 uploaded_file = st.file_uploader(
@@ -161,17 +137,17 @@ df = load_data(uploaded_file)
 
 if df[TARGET].dtype == object:
     df[TARGET] = df[TARGET].map({"Yes": 1, "No": 0})
-
-# ============================================================
-# BENEISH BENCHMARK
-# ============================================================
-
 def compute_beneish_m_score(row):
     return (
-        -4.84 + 0.92 * row["DSRI"] + 0.528 * row["GMI"]
-        + 0.404 * row["AQI"] + 0.892 * row["SGI"]
-        + 0.115 * row["DEPI"] - 0.172 * row["SGAI"]
-        + 4.679 * row["ACCR"] - 0.327 * row["LEVI"]
+        -4.84
+        + 0.92 * row["DSRI"]
+        + 0.528 * row["GMI"]
+        + 0.404 * row["AQI"]
+        + 0.892 * row["SGI"]
+        + 0.115 * row["DEPI"]
+        - 0.172 * row["SGAI"]
+        + 4.679 * row["ACCR"]
+        - 0.327 * row["LEVI"]
     )
 
 df["Beneish_M_Score"] = df.apply(compute_beneish_m_score, axis=1)
@@ -181,11 +157,6 @@ st.write(
     f"Percentage of firms flagged by Beneish Model: "
     f"{df['Beneish_Flag'].mean() * 100:.2f}%"
 )
-
-# ============================================================
-# MODEL SELECTION
-# ============================================================
-
 st.sidebar.header("Model Configuration")
 
 model_choice = st.sidebar.selectbox(
@@ -201,39 +172,32 @@ model_choice = st.sidebar.selectbox(
 
 test_size = st.sidebar.slider("Test Set Size", 0.2, 0.4, 0.05, 0.3)
 
-(
-    X_train_s, X_val_s, X_test_s,
-    y_train, y_val, y_test,
-    scaler, feature_names
-) = preprocess_data(df, test_size)
+X_train_s, X_val_s, X_test_s, y_train, y_val, y_test, scaler = preprocess_data(df, test_size)
 
 model = train_model(model_choice, X_train_s, y_train)
-
-# ============================================================
-# VALIDATION-BASED THRESHOLD
-# ============================================================
+st.subheader("Validation-Based Threshold Selection")
 
 y_val_prob = model.predict_proba(X_val_s)[:, 1]
+
 thresholds = np.arange(0.2, 0.8, 0.05)
+threshold_results = []
 
-scores = [
-    {"Threshold": t,
-     "Recall": recall_score(y_val, (y_val_prob >= t).astype(int)),
-     "F1": f1_score(y_val, (y_val_prob >= t).astype(int))}
-    for t in thresholds
-]
+for t in thresholds:
+    y_val_pred = (y_val_prob >= t).astype(int)
+    threshold_results.append({
+        "Threshold": t,
+        "Recall": recall_score(y_val, y_val_pred),
+        "F1 Score": f1_score(y_val, y_val_pred)
+    })
 
-threshold_df = pd.DataFrame(scores)
+threshold_df = pd.DataFrame(threshold_results)
+
 best_threshold = threshold_df.sort_values(
-    ["Recall", "F1"], ascending=False
+    ["Recall", "F1 Score"], ascending=False
 ).iloc[0]["Threshold"]
 
-st.write(f"**Selected Threshold (Validation-based): {best_threshold:.2f}**")
-
-# ============================================================
-# TEST EVALUATION
-# ============================================================
-
+st.write(f"**Selected Threshold: {best_threshold:.2f}**")
+st.dataframe(threshold_df)
 st.header("3. Model Performance Evaluation")
 
 y_test_prob = model.predict_proba(X_test_s)[:, 1]
@@ -252,31 +216,83 @@ metrics_df = pd.DataFrame({
 
 st.table(metrics_df)
 
-# ============================================================
-# SHAP EXPLAINABILITY (OPTIMIZED)
-# ============================================================
+st.subheader("Confusion Matrix")
 
+cm = confusion_matrix(y_test, y_test_pred)
+st.dataframe(pd.DataFrame(
+    cm,
+    index=["Actual Non-Manipulator", "Actual Manipulator"],
+    columns=["Predicted Non-Manipulator", "Predicted Manipulator"]
+))
 st.header("5. Model Explainability (SHAP)")
 
-if model_choice in HEAVY_MODELS:
-    st.info("SHAP skipped for ensemble models.")
+if model_choice in COMPLEX_MODELS:
+    st.info("SHAP is skipped for ensemble models due to attribution ambiguity.")
 
-elif execution_mode == "Fast Mode":
-    st.info("SHAP disabled in Fast Mode.")
+elif st.button("Run SHAP Analysis"):
 
-else:
-    if st.button("Run SHAP Analysis"):
-        with st.spinner("Computing SHAP values..."):
-            X_shap = pd.DataFrame(X_test_s, columns=feature_names).sample(100, random_state=42)
+    sample_size = 30 if execution_mode == "Fast Mode" else 100
+    X_shap = pd.DataFrame(X_test_s, columns=FEATURES).sample(
+        n=min(sample_size, len(X_test_s)), random_state=42
+    )
 
-            if model_choice == "Logistic Regression":
-                explainer = shap.LinearExplainer(model, X_shap)
-                shap_values = explainer.shap_values(X_shap)
-                shap.summary_plot(shap_values, X_shap, show=False)
+    if model_choice == "Logistic Regression":
+        explainer = shap.LinearExplainer(model, X_shap)
+        shap_values = explainer.shap_values(X_shap)
+    else:
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(X_shap)
 
-            else:
-                explainer = shap.TreeExplainer(model)
-                shap_values = explainer.shap_values(X_shap)
-                shap.summary_plot(shap_values, X_shap, show=False)
+    shap.summary_plot(shap_values, X_shap, show=False)
+    st.pyplot(bbox_inches="tight")
+st.header("7. Model Comparison (Beneish vs ML Models)")
 
-            st.pyplot(bbox_inches="tight")
+results = []
+
+beneish_pred = df.loc[df.index.isin(df.index), "Beneish_Flag"]
+
+results.append({
+    "Model": "Beneish M-Score",
+    "Accuracy": accuracy_score(y_test, beneish_pred),
+    "Precision": precision_score(y_test, beneish_pred),
+    "Recall": recall_score(y_test, beneish_pred),
+    "F1 Score": f1_score(y_test, beneish_pred),
+    "ROC-AUC": np.nan
+})
+
+for name in ["Logistic Regression", "Random Forest", "XGBoost"]:
+    mdl = get_model(name, y_train)
+    mdl.fit(X_train_s, y_train)
+    metrics = evaluate_model(mdl, X_test_s, y_test)
+    metrics["Model"] = name
+    results.append(metrics)
+
+st.dataframe(pd.DataFrame(results).set_index("Model"))
+st.header("6. Single Firm Risk Assessment")
+
+user_input = {}
+
+for feature in FEATURES:
+    user_input[feature] = st.number_input(
+        f"{feature}", value=float(df[feature].median())
+    )
+
+if st.button("Predict Manipulation Risk"):
+    input_df = pd.DataFrame([user_input])
+    input_scaled = scaler.transform(input_df)
+
+    risk_prob = model.predict_proba(input_scaled)[0][1]
+
+    st.metric(
+        label="Probability of Earnings Manipulation",
+        value=f"{risk_prob:.2%}"
+    )
+
+    if risk_prob >= best_threshold:
+        st.error("High Risk of Earnings Manipulation")
+    else:
+        st.success("Low Risk of Earnings Manipulation")
+
+beneish_score = compute_beneish_m_score(user_input)
+
+st.metric("Beneish M-Score (Reference)", f"{beneish_score:.2f}")
